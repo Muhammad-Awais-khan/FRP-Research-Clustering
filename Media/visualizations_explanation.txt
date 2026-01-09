@@ -1,0 +1,95 @@
+Visualizations Explanation — Media Directory
+
+This document describes each visualization produced by the notebook and saved into the `Media/` directory. Explanations are detailed and focused on how the plot was created, how to read it, what it reveals about the clustering, and important caveats. The TF-IDF top-term plots are explained collectively (they are produced for all 12 clusters).
+
+1) PCA 2D Scatter Plot
+- What it is: A 2-dimensional scatter of high-dimensional sentence embeddings reduced with Principal Component Analysis (PCA).
+- How it was made: Embeddings were L2-normalized, PCA(n_components=2) computed to project embeddings into two principal components, and points plotted via Matplotlib or Plotly colored by cluster id.
+- Axes: Principal Component 1 (X) and Principal Component 2 (Y). These are linear combinations of original embedding dimensions capturing the largest variance axes. Units are abstract; only relative positions matter.
+- Color/Legend: Colors correspond to KMeans cluster ids (0–11). Each color groups documents assigned to the same cluster.
+- Interpretation: Clusters that appear as tight, well-separated clouds indicate coherent groups of semantically similar abstracts. Overlapping clouds suggest related topics or ambiguous boundaries. Outliers appear far from cluster centers and may indicate noise, unusual documents, or mislabeled points.
+- Caveats: PCA is linear and compresses information — 2D distances are approximate. Separation in 2D does not guarantee separation in original high-dimensional space. Use as a quick sanity check and to locate obvious outliers.
+
+2) Per-Cluster Subplots (One subplot per cluster)
+- What it is: A multi-panel Matplotlib figure with one subplot per cluster showing only that cluster highlighted and all other points as a faded background.
+- How it was made: The same PCA 2D coordinates (`embeddings_2d`) are plotted repeatedly. For each subplot: non-cluster points are drawn in light gray with low alpha; cluster points are drawn in a distinct color. Titles include the cluster id, wrapped cluster name, and the number of documents in the cluster.
+- Layout and visuals: Typically 4 columns across with enough rows to show all clusters. Axis ticks are removed for clarity and each subplot uses common axis limits for direct visual comparability.
+- Interpretation: Enables inspection of each cluster’s shape and compactness in the same coordinate frame. Good for spotting clusters that are compact vs. diffuse, clusters that overlap with others, and clusters with very few points.
+- Caveats: A compact-looking cluster in 2D might still be multimodal in higher dimensions. Likewise, a spread-out 2D cluster can still be cohesive in the original space.
+
+3) Interactive PCA (Plotly)
+- What it is: An interactive 2D scatter plot (Plotly) where hovering displays metadata (title, abstract) and users can zoom, pan, and select points.
+- How it was made: A DataFrame with PCA coordinates and metadata is plotted via `plotly.express.scatter` with `hover_data=['title','abstract']` and cluster used for color.
+- Interactivity features: Hover-to-inspect title/abstract, zoom and pan, box/lasso selection, legend toggling (show/hide clusters), and ability to export/save the HTML.
+- Interpretation & use: Very useful for qualitative validation — hover on boundary points to see whether neighbors share topics; use selection tools to gather candidate misclustered documents.
+- Caveats: With very large datasets, in-browser performance or legibility may degrade. Consider plotting a sampled subset or using server-backed visualization for thousands of points.
+
+4) Silhouette Histogram
+- What it is: A histogram of silhouette scores computed per sample, using cosine distance (appropriate since embeddings were normalized).
+- How it was made: `silhouette_samples(normalize_embeddings, categories, metric='cosine')` produces a silhouette value per sample; these values are plotted as a histogram.
+- Meaning: Silhouette values range roughly from -1 to +1. Values near +1 mean a document is well matched to its cluster; values near 0 indicate samples on or near the decision boundary; negative values suggest possible misassignment.
+- Interpretation: A distribution concentrated towards +1 implies generally good clustering; many values near 0 or negative suggest ambiguous or poor separation.
+- Caveats: Global histograms hide per-cluster variability. For targeted debugging, compute mean silhouette per cluster to find which clusters need attention.
+
+5) Elbow Plot (Inertia vs k)
+- What it is: A plot of KMeans inertia (sum of squared distances of samples to their closest cluster center) across a range of k values.
+- How it was made: For k in a range (e.g., 2–15), KMeans was fit and the `inertia_` recorded; these values are plotted against k.
+- Interpretation: Look for an 'elbow' where the marginal gain of increasing k diminishes — a heuristic indicator of reasonable cluster count. The notebook uses k=12, which should be checked against this plot plus silhouette and domain knowledge.
+- Caveats: The elbow method is heuristic and subjective; datasets often lack a clear elbow. Combine with silhouette scores and domain expertise when selecting k.
+
+6) Cluster Centroid Cosine-Similarity Heatmap
+- What it is: A heatmap of pairwise cosine similarities between cluster centroids.
+- How it was made: For each cluster, compute centroid = mean vector of normalized embeddings in that cluster; compute cosine_similarity(centroids); plot via seaborn heatmap with cluster ids as labels.
+- Axes/values: Rows and columns correspond to clusters. Each cell value is the cosine similarity between two centroids (typically in [0,1] for normalized embeddings).
+- Interpretation: High similarity (closer to 1) between centroids means clusters are semantically close — possibly subtopics of a broader theme or overlapping topics. Low similarity indicates more distinct clusters.
+- Use cases: Identify clusters that might be merged, or groups of clusters that form a higher-level category. Also helps validate the distinctness of assigned categories.
+- Caveats: Centroid averaging can obscure multimodal structure — two different subtopics averaged into a centroid may give a misleading similarity. Consider examining raw documents where centroids appear close.
+
+7) TF-IDF Top-Term Bar Charts (General explanation for all 12)
+- What these plots are (common for all 12): For each cluster (0–11) the notebook saves a horizontal bar chart named `cluster {cid} top 10 term.png` showing the top TF-IDF terms for that cluster.
+- How they were made (common process):
+  - A global `TfidfVectorizer(max_features=5000, stop_words='english')` was fit on all abstracts.
+  - For a given cluster, the rows of the TF-IDF matrix that correspond to documents in that cluster are averaged to produce a mean TF-IDF score per term for that cluster.
+  - The top N terms by average score are selected and plotted as a horizontal bar chart (term on Y-axis, mean TF-IDF value on X-axis).
+- Axes and encoding (applies to every chart):
+  - Y-axis: Top terms (single tokens unless vectorizer used n-grams).
+  - X-axis: Mean TF-IDF score for each term within the cluster (higher means the term is more characteristic of that cluster relative to corpus).
+- What these charts show (collectively):
+  - The thematic fingerprint of each cluster — the terms most characteristic of that cluster’s abstracts.
+  - They help to assign or validate human-readable category labels and to understand the dominant technical topics, materials, methods, and application areas in the cluster.
+- Interpretation tips (applies to all 12):
+  - Frequent technical words and acronyms often reveal the core subject (e.g., words like "bond", "shear", "GFRP", "confinement").
+  - Compare neighboring clusters’ term lists to identify subtle differences (e.g., "flexural" vs "shear" vs "bond").
+  - Use these terms together with example titles/abstracts to confirm cluster themes.
+- Limitations & biases (applies to all 12):
+  - TF-IDF emphasizes words that are frequent in a cluster but rare globally — important signals but not the whole story.
+  - Single-token terms lose phrase-level nuance (consider enabling bigrams/trigrams for richer phrases).
+  - `max_features` can banish some rare but critical domain terms; tokenization may split domain phrases awkwardly.
+- Practical uses:
+  - Assign readable labels and short descriptions for each category.
+  - Identify terms to use when searching for representative example papers.
+  - Guide improvements: add n-grams, tune `max_features`, or remove noisy tokens.
+
+8) Cluster Samples Text File (e.g., `cluster 0 top 10 term samples.txt`)
+- What it is: A plain text file listing a few sample paper titles from cluster 0 (the notebook writes the first few titles for `Cluster_ID==0` to this file). Equivalent files can be generated for other clusters.
+- Purpose: Provide human-readable exemplars that illustrate what documents in the cluster look like at a glance.
+- How it was made: `data[data['Cluster_ID']==0]['Title'].head(5)` written line-by-line to a UTF-8 `.txt` file. If the target filename already existed, a timestamped filename was used in the notebook to avoid overwriting.
+- How to use: Read the titles to quickly validate the cluster’s theme and compare with TF-IDF top terms. For stronger validation, inspect the abstract text alongside the title.
+- Caveats: Titles alone may be ambiguous — combine with the abstract (available in the interactive plot hover) or sample abstracts in the final Excel output for higher confidence.
+
+Wrap-up — Practical checklist for validating clusters using these media files
+- Start with TF-IDF bar charts (all 12) to form an initial hypothesis for each cluster’s theme.
+- Open the `cluster X top 10 term samples.txt` file (or sample titles from `Final_Database.csv`) to read a few document titles per cluster.
+- Use the interactive PCA plot to hover and inspect abstracts for boundary points or confusing cases.
+- Consult the silhouette histogram and per-cluster silhouette means to flag clusters or documents with low confidence for manual review.
+- Use the centroid similarity heatmap to find clusters that are very similar and consider merging or relabeling them.
+- Iterate: refine TF-IDF settings (n-grams, stop words, max_features), consider alternative clustering (e.g., hierarchical) for closely related clusters, and build a small labeled set for supervised refinement if needed.
+
+Suggested next actions (optional):
+- Produce a `cluster_summary.csv` that lists for each cluster: top 10 TF-IDF terms, 3 sample titles, cluster size, mean silhouette score, and centroid similarity group.
+- Recompute TF-IDF with bigrams/trigrams to improve phrase capture and regenerate the top-term plots.
+
+---
+File created: `Media/visualizations_explanation.txt`
+
+If you want, I can now: (a) generate the `cluster_summary.csv` mentioned above, or (b) write per-cluster sample files for all clusters (not just cluster 0). Which would you like next?
